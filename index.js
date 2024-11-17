@@ -15,6 +15,7 @@ const Port = process.env.PORT || 3000;
 const Telegram_Token = process.env.TELEGRAM_API_TOKEN;
 const MongoDB_URI = process.env.MONGODB_URI;
 const FERHAT_API_BASE_URL = process.env.FERHAT_API_BASE_URL;
+const ADMIN_KEY = process.env.ADMIN_KEY;
 
 let PLANS = [
   {
@@ -147,7 +148,7 @@ async function handleUpdateKey(chatId) {
           // });
 
           // error her admin can't change his api key
-          if (apiKey === "17cf144b-1243-4319-b6d9-def442815318") {
+          if (apiKey === ADMIN_KEY) {
             await User.findOneAndUpdate(
               { chatId },
               { apiKey },
@@ -390,38 +391,29 @@ bot.on("message", async (msg) => {
 });
 
 ///THIS IS ADDED TO PREVENT RENDER FROM SPINNING OFF
-// function reloadWebsite() {
-//   const url = `https://ich7en-automated-telegram-bot.onrender.com/`; // Replace with your Render URL
-//   const interval = 30000; // Interval in milliseconds (30 seconds)
-//   axios
-//     .get(url)
-//     .then((response) => {
-//       console.log(
-//         `Reloaded at ${new Date().toISOString()}: Status Code ${
-//           response.status
-//         }`
-//       );
-//     })
-//     .catch((error) => {
-//       console.error(
-//         `Error reloading at ${new Date().toISOString()}:`,
-//         error.message
-//       );
-//     });
-// }
+function reloadWebsite() {
+  const url = `https://ich7en-automated-telegram-bot.onrender.com/`; // Replace with your Render URL
+  const interval = 30000; // Interval in milliseconds (30 seconds)
+  axios
+    .get(url)
+    .then((response) => {
+      console.log(
+        `Reloaded at ${new Date().toISOString()}: Status Code ${
+          response.status
+        }`
+      );
+    })
+    .catch((error) => {
+      console.error(
+        `Error reloading at ${new Date().toISOString()}:`,
+        error.message
+      );
+    });
+}
 
-cron.schedule("* * * * *", () => {
+cron.schedule("0 * * * *", () => {
   notifyAdmin();
 });
-
-// cron.schedule("* * * * *", () => {
-//   reloadWebsite();
-// });
-
-// cron.schedule('0 */5 * * *', () => {
-//   console.log('Cron Job 1: Running every 5 hours');
-//   // Add your task logic here
-// });
 
 app.listen(Port, () => {
   console.log(`App listening on port ${Port}`);
