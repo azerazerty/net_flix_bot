@@ -414,6 +414,9 @@ function reloadWebsite() {
 cron.schedule("0 * * * *", () => {
   notifyAdmin();
 });
+cron.schedule("* * * * *", () => {
+  reloadWebsite();
+});
 
 app.listen(Port, () => {
   console.log(`App listening on port ${Port}`);
