@@ -392,7 +392,7 @@ bot.on("message", async (msg) => {
 
 ///THIS IS ADDED TO PREVENT RENDER FROM SPINNING OFF
 function reloadWebsite() {
-  const url = `https://ich7en-automated-telegram-bot.onrender.com/`; // Replace with your Render URL
+  const url = `https://net-flix-bot.onrender.com`; // Replace with your Render URL
   const interval = 30000; // Interval in milliseconds (30 seconds)
   axios
     .get(url)
