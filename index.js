@@ -7,13 +7,33 @@ const mongoose = require("mongoose");
 const User = require("./Models/userModel");
 const Order = require("./Models/orderModel");
 const cron = require("node-cron");
+const validator = require("email-validator");
 
 const { v4: uuidv4, validate: validateUUID } = require("uuid");
 
 const Port = process.env.PORT || 3000;
 const Telegram_Token = process.env.TELEGRAM_API_TOKEN;
 const MongoDB_URI = process.env.MONGODB_URI;
-const ICH7EN_API_BASE_URL = process.env.ICH7EN_API_BASE_URL;
+const FERHAT_API_BASE_URL = process.env.FERHAT_API_BASE_URL;
+
+let PLANS = [
+  {
+    id: 0,
+    plan: "1 Month Subscription",
+  },
+  {
+    id: 1,
+    plan: "3 Months Subscription",
+  },
+  {
+    id: 2,
+    plan: "6 Months Subscription",
+  },
+  {
+    id: 3,
+    plan: "1 Year Subscription",
+  },
+];
 
 const app = express();
 const bot = new TelegramBot(Telegram_Token, { polling: true });
@@ -22,13 +42,7 @@ let BOT_WAITING_FOR_RESPONSE = false;
 
 const USERS_STATE = {};
 
-const BUTTONS = [
-  "🔑 Set/Change Api Key",
-  "💰 Balance",
-  "📦 Recent Orders",
-  "🏷️ TopUp Free Fire Gems",
-  "🏷️ TopUp PUBG UC",
-];
+const BUTTONS = ["🔑 Set/Change Api Key", "🔍 Memberships Search"];
 
 // Connect to MongoDB
 mongoose
@@ -48,107 +62,13 @@ app.get("/", (req, res) => {
 });
 
 /// TESTING
-const freefire_offers = [
-  {
-    id: 33,
-    name: "💎 100 + 10  💎",
-    description: "_Total Price To Pay:_  💵* 1.00 $*",
-    price: 1.0,
-  },
-  {
-    id: 34,
-    name: "💎 310 + 31 💎",
-    description: "_Total Price To Pay:_  💵* 3.00 $*",
-    price: 3.0,
-  },
-  {
-    id: 49,
-    name: "💎 520 + 52 💎",
-    description: "_Total Price To Pay:_  💵* 5.00 $*",
-    price: 5.0,
-  },
-  {
-    id: 51,
-    name: "💎 1060 + 106 💎",
-    description: "_Total Price To Pay:_  💵* 10.00 $*",
-    price: 10.0,
-  },
-  {
-    id: 64,
-    name: "💎 2180 + 218 💎",
-    description: "_Total Price To Pay:_  💵* 20.00 $*",
-    price: 20.0,
-  },
-  {
-    id: 77,
-    name: "👑 BOOYAH Pass 👑",
-    description: "_Total Price To Pay:_  💵* 3.00 $*",
-    price: 3.0,
-  },
-  {
-    id: 75,
-    name: "📆 Weekly Membership 📆",
-    description: "_Total Price To Pay:_  💵* 2.00 $*",
-    price: 2.0,
-  },
-  {
-    id: 76,
-    name: "📆 Monthly Membership 📆",
-    description: "_Total Price To Pay:_  💵* 10.00 $*",
-    price: 10.0,
-  },
-  // { id: 2, name: "Offer 2", description: "Description for offer 2" },
-  // { id: 3, name: "Offer 3", description: "Description for offer 3" },
-];
-
-const pubg_offers = [
-  {
-    id: 78,
-    name: "🪖 PUBG 60 UC  🪖",
-    description: "_Total Price To Pay:_  💵* 1.00 $*",
-    price: 1.0,
-  },
-  {
-    id: 79,
-    name: "🪖 PUBG 325 UC  🪖",
-    description: "_Total Price To Pay:_  💵* 5.00 $*",
-    price: 5.0,
-  },
-  {
-    id: 80,
-    name: "🪖 PUBG 660 UC  🪖",
-    description: "_Total Price To Pay:_  💵* 10.00 $*",
-    price: 10.0,
-  },
-  {
-    id: 81,
-    name: "🪖 PUBG 1800 UC  🪖",
-    description: "_Total Price To Pay:_  💵* 25.00 $*",
-    price: 25.0,
-  },
-  {
-    id: 82,
-    name: "🪖 PUBG 3850 UC  🪖",
-    description: "_Total Price To Pay:_  💵* 50.00 $*",
-    price: 50.0,
-  },
-  {
-    id: 83,
-    name: "🪖 PUBG 8100 UC  🪖",
-    description: "_Total Price To Pay:_  💵* 100.00 $*",
-    price: 100.0,
-  },
-];
 
 const commands = [
   { command: "/start", description: "Start the bot and set API key" },
   {
-    command: "/freefire_offers",
-    description: "List available Free Fire offers",
+    command: "/search",
+    description: "Search and Check for Membership Status",
   },
-  { command: "/pubg_offers", description: "List available PUBG offers" },
-  { command: "/balance", description: "List available offers" },
-  { command: "/recent", description: "List recent orders" },
   // { command: "/check", description: "Check options" },
   { command: "/help", description: "List all available commands" },
   { command: "/key", description: "Set/Change your API key" },
@@ -162,12 +82,7 @@ function handleStartCommand(chatId) {
   // bot.sendMessage(chatId, "Welcome! Please provide your API key:");
   bot.sendMessage(chatId, "Welcome", {
     reply_markup: {
-      keyboard: [
-        ["🔑 Set/Change Api Key"],
-        ["💰 Balance", "📦 Recent Orders"],
-        ["🏷️ TopUp Free Fire Gems"],
-        ["🏷️ TopUp PUBG UC"],
-      ],
+      keyboard: [["🔑 Set/Change Api Key"], ["🔍 Memberships Search"]],
       resize_keyboard: true,
 
       one_time_keyboard: false,
@@ -177,80 +92,12 @@ function handleStartCommand(chatId) {
   // userKeys[chatId] = null; // Initialize user key as null
 }
 
-async function handleFreeFireOffersCommand(chatId) {
-  if (!(await isAuthenticated(chatId))) {
-    bot.sendMessage(chatId, "Please provide your API key first.");
-    return;
-  }
-  const offerButtons = freefire_offers.map((offer) => [
-    {
-      text: offer.name,
-      callback_data: `offer_select_freefire_${offer.id}`,
-    },
-  ]);
-  const options = {
-    reply_markup: {
-      inline_keyboard: [...offerButtons],
-    },
-  };
-  bot.sendMessage(chatId, "Please select an offer:", options);
-}
-async function handlePubgOffersCommand(chatId) {
-  if (!(await isAuthenticated(chatId))) {
-    bot.sendMessage(chatId, "Please provide your API key first.");
-    return;
-  }
-  const offerButtons = pubg_offers.map((offer) => [
-    {
-      text: offer.name,
-      callback_data: `offer_select_pubg_${offer.id}`,
-    },
-  ]);
-  const options = {
-    reply_markup: {
-      inline_keyboard: [...offerButtons],
-    },
-  };
-  bot.sendMessage(chatId, "Please select an offer:", options);
-}
-
-async function handleOfferSelection(chatId, offerId, game) {
-  let offers;
-  switch (game) {
-    case "freefire":
-      offers = freefire_offers;
-      break;
-    case "pubg":
-      offers = pubg_offers;
-      break;
-    default:
-      offers = freefire_offers;
-
-      break;
-  }
-  const selectedOffer = offers.find((offer) => offer.id == offerId);
-  if (selectedOffer) {
-    bot.sendMessage(
-      chatId,
-      `You selected: ${selectedOffer.name}\n\n${selectedOffer.description}`,
-      {
-        parse_mode: "MARKDOWN",
-      }
-    );
-    // Here you can add logic to create the offer and send the status
-
-    await PlaceOrder(
-      chatId,
-      selectedOffer.id,
-      selectedOffer.price,
-      selectedOffer.name
-    );
-
-    // bot.sendMessage(chatId, `Offer status: Created successfully!`);
-  } else {
-    bot.sendMessage(chatId, "Invalid offer selected.");
-  }
-}
+// async function handleFreeFireOffersCommand(chatId) {
+//   if (!(await isAuthenticated(chatId))) {
+//     bot.sendMessage(chatId, "Please provide your API key first.");
+//     return;
+//   }
+// }
 
 async function handleKeyCommand(chatId) {
   if (!(await isAuthenticated(chatId))) {
@@ -267,25 +114,6 @@ async function handleKeyCommand(chatId) {
     );
     handleUpdateKey(chatId);
   }
-}
-
-async function handleBalanceCommand(chatId) {
-  if (!(await isAuthenticated(chatId))) {
-    bot.sendMessage(chatId, "Please provide your API key first.");
-    return;
-  }
-  handleBalance(chatId);
-  // bot.sendMessage(chatId, "Balance : 10.25 $");
-  return;
-}
-
-async function handleRecentCommand(chatId) {
-  if (!(await isAuthenticated(chatId))) {
-    bot.sendMessage(chatId, "Please provide your API key first.");
-    return;
-  }
-  handleRecentOrders(chatId);
-  return;
 }
 
 function sendAvailableCommands(chatId) {
@@ -310,25 +138,29 @@ async function handleUpdateKey(chatId) {
       const apiKey = msg.text;
 
       if (validateUUID(apiKey)) {
+        // ican hard check for apiKey
         try {
-          await axios.get(`${ICH7EN_API_BASE_URL}/profile`, {
-            headers: {
-              "api-token": `${apiKey}`,
-            },
-          });
+          // await axios.get(`${ICH7EN_API_BASE_URL}/profile`, {
+          //   headers: {
+          //     "api-token": `${apiKey}`,
+          //   },
+          // });
 
-          await User.findOneAndUpdate(
-            { chatId },
-            { apiKey },
-            { upsert: true, new: true }
-          );
-
-          bot.sendMessage(chatId, "API key updated successfully!");
-          sendAvailableCommands(chatId);
-
-          // Clear the user's state and remove the listener after success
-          USERS_STATE[chatId] = {};
-          bot.removeListener("message", onMessage);
+          // error her admin can't change his api key
+          if (apiKey === "17cf144b-1243-4319-b6d9-def442815318") {
+            await User.findOneAndUpdate(
+              { chatId },
+              { apiKey },
+              { upsert: true, new: true }
+            );
+            bot.sendMessage(chatId, "API key updated successfully!");
+            sendAvailableCommands(chatId);
+            // Clear the user's state and remove the listener after success
+            USERS_STATE[chatId] = {};
+            bot.removeListener("message", onMessage);
+          } else {
+            throw new Error("wrong API key");
+          }
         } catch (err) {
           console.error("Error saving API key:", err.message);
           bot.sendMessage(chatId, "Failed to save API key. Please try again.");
@@ -348,267 +180,131 @@ async function handleUpdateKey(chatId) {
   bot.on("message", onMessage);
 }
 
-async function handleBalance(chatId) {
-  try {
-    const user = await User.findOne({ chatId });
-    axios
-      .get(`${ICH7EN_API_BASE_URL}/profile`, {
-        headers: {
-          "api-token": `${user.apiKey}`,
-        },
-      })
-      .then((response) => {
-        bot.sendMessage(
-          chatId,
-          // `
-          // 💰  <b>Your current Balance:</b>   💵   <code>${response.data.data.balance}</code></br></br>
-          // ☎️  <em>Reach Out To Make Deposit:</em>  <a href="https://wa.me/213659791718">Send Message On Whatsapp</a>
-          // `,
-          `💰 *Your current Balance:*   💵   \`${response.data.data.balance}\` \n\n☎️  _Reach Out To Make Deposit:_  [Send Message On Whatsapp](https://wa.me/213659791718)  `,
-          {
-            parse_mode: "MARKDOWN",
-          }
-        );
-        return;
-      })
-      .catch((error) => {
-        console.log("GetProfile Error : ", error.message);
-        bot.sendMessage(chatId, "Failed to Get User Balance.");
-      });
-  } catch (error) {
-    console.log("HandleBalance Error : ", error.message);
-    bot.sendMessage(chatId, "Failed to Get User Balance.");
+async function handleGetMembership(chatId) {
+  if (!(await isAuthenticated(chatId))) {
+    bot.sendMessage(chatId, "Please provide your API key first.");
+    return;
   }
-}
-
-async function PlaceOrder(chatId, id, price, name) {
-  USERS_STATE[chatId] = {};
-
   // Set user state for waiting for player ID
-  USERS_STATE[chatId] = { waitingForPlayerId: true };
+  USERS_STATE[chatId] = { waitingForEmail: true };
 
-  bot.sendMessage(chatId, "Enter Player ID:");
+  bot.sendMessage(
+    chatId,
+    "Enter Email for which Membership you want to see Details:"
+  );
 
   // Create a function to handle user messages
   const handleMessage = async (msg) => {
     if (BUTTONS.includes(msg.text)) {
       bot.removeListener("message", handleMessage); // Remove the listener
-
       return;
     }
-    if (msg.chat.id !== chatId || !USERS_STATE[chatId]?.waitingForPlayerId) {
+    if (msg.chat.id !== chatId || !USERS_STATE[chatId]?.waitingForEmail) {
       bot.removeListener("message", handleMessage); // Remove the listener
-
       return;
     }
-    if (isNaN(parseInt(msg.text)) || parseInt(msg.text) < 1000) {
-      bot.sendMessage(chatId, "Wrong ID Number. Please Type Valid ID ");
+    //check if its valid email
 
+    if (!validator.validate(msg.text)) {
+      bot.sendMessage(chatId, "Wrong Email . Please Enter Valid Email!  ");
       return;
     }
+    let email = msg.text;
+    //send request to server to grab membership details
 
-    const playerId = msg.text;
-    USERS_STATE[chatId] = { waitingForConfirmation: true };
-
-    const buttons = [
-      { text: "👍 Confirm", callback_data: "confirm_yes" },
-      { text: "👎 Cancel", callback_data: "confirm_no" },
-    ];
-
-    bot.sendMessage(chatId, "Proceed to Purchase?", {
-      reply_markup: { inline_keyboard: [buttons] },
-      parse_mode: "Markdown",
-    });
-
-    const handleCallbackQuery = async (query) => {
-      if (
-        query.message.chat.id !== chatId ||
-        !USERS_STATE[chatId]?.waitingForConfirmation
-      ) {
-        bot.removeListener("callback_query", handleCallbackQuery); // Remove the listener
-        return;
-      }
-
-      if (query.data === "confirm_yes") {
-        try {
-          const user = await User.findOne({ chatId });
-          const response = await axios.post(
-            `${ICH7EN_API_BASE_URL}/order`,
-            {
-              playerId,
-              itemId: id,
-              quantity: 1,
-              referenceId: uuidv4(),
-            },
-            { headers: { "api-token": `${user.apiKey}` } }
-          );
-
-          await Order.create({
-            userChatId: chatId,
-            orderName: name,
-            playerId,
-            itemId: id,
-            price,
-            orderNumber: response.data.data.orderNumber,
-            invoiceNumber: response.data.data.invoiceNumber,
-          });
-
-          const newBalanceResponse = await axios.get(
-            `${ICH7EN_API_BASE_URL}/profile`,
-            {
-              headers: { "api-token": `${user.apiKey}` },
-            }
-          );
-
-          const newBalance = newBalanceResponse.data.data.balance;
-
-          bot.sendMessage(
-            chatId,
-            `Your Order Has been Created successfully!\n\n📦 _Order Number:_ \`${response.data.data.orderNumber}\`\n💰 _Your Current Balance:_ \`${newBalance}\``,
-            { parse_mode: "MARKDOWN" }
-          );
-        } catch (error) {
-          console.error("PlaceOrder Error:", error.message);
-          bot.sendMessage(
-            chatId,
-            `Failed to TopUp.\n_${error.response.data.text}_`,
-            {
-              parse_mode: "MARKDOWN",
-            }
-          );
+    // let result = {
+    //   id: 1,
+    //   email,
+    //   start_date: "2024-11-16",
+    //   end_date: "2025-11-16",
+    //   membership: "1 Year Membership",
+    //   status: "Active",
+    // };
+    let result = await axios
+      .post(`${FERHAT_API_BASE_URL}/search.php`, {
+        email,
+      })
+      .then((r) => r.data?.subscription);
+    if (!result) {
+      bot.sendMessage(
+        chatId,
+        `🔴 *Fail* : Cannot Find Any Membership Related to that Email`,
+        {
+          parse_mode: "MARKDOWN",
         }
-      } else {
-        bot.sendMessage(chatId, "Your Order Has Been Canceled.");
+      );
+      return;
+    }
+    let statusPoint = "🟡";
+    switch (result.status) {
+      case "active":
+        statusPoint = "🟢";
+        break;
+      case "expired":
+        statusPoint = "🔴";
+        break;
+      default:
+        break;
+    }
+    bot.sendMessage(
+      chatId,
+      `*Membership Found:* ${result.email} \n\n
+      *STATUS:*  ${statusPoint}  *${result.status.toUpperCase()}*\n\n 
+      🏷️ _Plan:_  \`${PLANS[result?.membership].plan || "UNKNOWN PLAN"}\`\n 
+      📆 _Start Date:_  \`${result.start_date}\`\n
+      📆 _End Date:_  \`${result.end_date}\`\n
+      \n\n                   
+                      `,
+      {
+        parse_mode: "MARKDOWN",
       }
-
-      // Clear user state after the operation is complete
-      USERS_STATE[chatId] = {};
-      bot.removeListener("callback_query", handleCallbackQuery); // Remove the listener
-    };
-
-    bot.on("callback_query", handleCallbackQuery);
-
+    );
     bot.removeListener("message", handleMessage); // Remove the listener
   };
 
   bot.on("message", handleMessage);
 }
 
-async function handleRecentOrders(chatId) {
+async function notifyAdmin(_Memberships) {
+  //search for users and send updates
   try {
-    Order.find({ userChatId: chatId })
-      .sort({ createdAt: -1 })
-      .limit(10)
-      .then((orders) => {
-        if (orders.length > 0) {
+    let ExpiredSubs = await axios
+      .get(`${FERHAT_API_BASE_URL}/notification.php`)
+      .then((r) => r.data?.Expired_subscriptions);
+    if (!ExpiredSubs || ExpiredSubs.length < 1) return;
+    let users = await User.find();
+    if (users && users.length > 0) {
+      users.map((user) => {
+        // let result = {
+        //   id: 1,
+        //   email: "test@test.com",
+        //   start_date: "2024-11-16",
+        //   end_date: "2025-11-16",
+        //   membership: "1 Year Membership",
+        //   status: "Active",
+        // };
+        ExpiredSubs.map((ExpiredSub) => {
           bot.sendMessage(
-            chatId,
-            "_Note: Tap on Order to see order Status and other Details_",
-            { parse_mode: "Markdown" }
-          );
-
-          const ordersButtons = orders.map((order) => [
+            user.chatId,
+            `
+            🚨 *Membership Expired:* 🚨 ${ExpiredSub?.email} \n\n
+            🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨\n
+            🏷️ _Plan:_  \`${
+              PLANS[ExpiredSub?.membership] || "UNKNOWN PLAN"
+            }\`\n 
+            📆 _Start Date:_  \`${ExpiredSub?.start_date}\`\n
+            📆 _End Date:_  \`${ExpiredSub?.end_date}\`\n
+            🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨\n\n                   
+                            `,
             {
-              text: `🛒 `
-                .concat(" ")
-                .concat(
-                  `OrderNumber : =>  ${[...order.orderNumber.toString()].join(
-                    " "
-                  )}`
-                )
-                .concat(" ")
-                .concat(` 🛒`),
-              callback_data: `order_select_all_${order.orderNumber}`,
-            },
-          ]);
-          const options = {
-            reply_markup: {
-              inline_keyboard: [...ordersButtons],
-            },
-            parse_mode: "MARKDOWN",
-          };
-          bot.sendMessage(chatId, "*Recent Orders :*", options);
-
-          return;
-        }
-        bot.sendMessage(chatId, "Recent Orders : You have no orders Yet");
-        return;
-      })
-      .catch((error) => {
-        console.log("BalanceOrders Error : ", error.message);
-        bot.sendMessage(chatId, "Failed to Get Recent Orders.");
+              parse_mode: "MARKDOWN",
+            }
+          );
+        });
       });
+    }
   } catch (error) {
-    console.log("HandleBalanceOrders Error : ", error.message);
-    bot.sendMessage(chatId, "Failed to Get Recent Orders.");
-  }
-}
-
-async function CheckOrder(chatId, orderNumber) {
-  try {
-    const user = await User.findOne({ chatId });
-    axios
-      .post(
-        `${ICH7EN_API_BASE_URL}/status`,
-        {
-          orderNumbers: [orderNumber],
-        },
-        {
-          headers: {
-            "api-token": `${user.apiKey}`,
-          },
-        }
-      )
-      .then(async (response) => {
-        //save order in db
-        const newOrder = await Order.findOneAndUpdate(
-          {
-            orderNumber,
-          },
-          {
-            status: response.data.data[0].status,
-          },
-          {
-            new: true,
-          }
-        );
-        let statusPoint = "🟡";
-        switch (newOrder.status) {
-          case "Complete":
-            statusPoint = "🟢";
-            break;
-          case "Cancelled":
-            statusPoint = "🔴";
-            break;
-          default:
-            break;
-        }
-
-        bot.sendMessage(
-          chatId,
-          `
-    *STATUS:*  ${statusPoint}  *${newOrder.status}*\n\n             
-    🏷️ _TopUp Offer:_  *${newOrder.orderName}*\n
-    👤 _Player Id:_  \`${newOrder.playerId}\`\n
-    💵 _Total Price:_  \`${parseFloat(newOrder.price.toString())} $\`\n
-    📦 _Order Number:_  \`${newOrder.orderNumber}\`\n 
-    \n\n                   
-                    `,
-          {
-            parse_mode: "MARKDOWN",
-          }
-        );
-        //excute order status function
-
-        return;
-      })
-      .catch((error) => {
-        console.log("GetOrder Error : ", error.message);
-        bot.sendMessage(chatId, "Failed to Get Order Details.");
-      });
-  } catch (error) {
-    console.log("CheckOrder Error : ", error.message);
-    bot.sendMessage(chatId, "Failed to Get Order Details.");
+    console.log(error);
   }
 }
 
@@ -618,31 +314,11 @@ bot.onText(/\/start/, (msg) => {
   handleStartCommand(msg.chat.id);
 });
 
-bot.onText(/\/freefire_offers/, (msg) => {
+bot.onText(/\/search/, (msg) => {
   // BOT_WAITING_FOR_RESPONSE = false;
   const chatId = msg.chat.id;
   USERS_STATE[chatId] = {};
-  handleFreeFireOffersCommand(chatId);
-});
-bot.onText(/\/pubg_offers/, (msg) => {
-  // BOT_WAITING_FOR_RESPONSE = false;
-  const chatId = msg.chat.id;
-  USERS_STATE[chatId] = {};
-  handlePubgOffersCommand(chatId);
-});
-
-bot.onText(/\/balance/, (msg) => {
-  // BOT_WAITING_FOR_RESPONSE = false;
-  const chatId = msg.chat.id;
-  USERS_STATE[chatId] = {};
-  handleBalanceCommand(chatId);
-});
-
-bot.onText(/\/recent/, (msg) => {
-  // BOT_WAITING_FOR_RESPONSE = false;
-  const chatId = msg.chat.id;
-  USERS_STATE[chatId] = {};
-  handleRecentCommand(chatId);
+  handleGetMembership(chatId);
 });
 
 bot.onText(/\/help/, (msg) => {
@@ -664,64 +340,46 @@ bot.onText(/\/key/, async (msg) => {
 });
 
 // Callback query handler
-bot.on("callback_query", (query) => {
-  const chatId = query.message.chat.id;
-  const data = query.data.split("_");
-  const command = data[0];
-  const action = data[1];
-  const game = data[2];
-  const id = data[3];
+// bot.on("callback_query", (query) => {
+//   const chatId = query.message.chat.id;
+//   const data = query.data.split("_");
+//   const command = data[0];
+//   const action = data[1];
+//   const game = data[2];
+//   const id = data[3];
 
-  switch (command) {
-    case "offer":
-      if (action === "select") {
-        if (Object.keys(USERS_STATE[chatId]).length > 0) return;
-        handleOfferSelection(chatId, id, game);
-      }
-      break;
-    case "order":
-      if (action === "select") {
-        CheckOrder(chatId, id);
-      }
-      break;
-    case "confirm":
-      break;
-    default:
-      bot.sendMessage(chatId, "Invalid selection.");
-      break;
-  }
-});
+//   switch (command) {
+//     case "offer":
+//       if (action === "select") {
+//         if (Object.keys(USERS_STATE[chatId]).length > 0) return;
+//         handleOfferSelection(chatId, id, game);
+//       }
+//       break;
+//     case "order":
+//       if (action === "select") {
+//         CheckOrder(chatId, id);
+//       }
+//       break;
+//     case "confirm":
+//       break;
+//     default:
+//       bot.sendMessage(chatId, "Invalid selection.");
+//       break;
+//   }
+// });
 
 bot.on("message", async (msg) => {
   const chatId = msg.chat.id;
 
   if (!msg.text.startsWith("/")) {
-    if (msg.text.indexOf("💰 Balance") === 0) {
-      // BOT_WAITING_FOR_RESPONSE = false;
-      USERS_STATE[chatId] = {};
-      handleBalanceCommand(chatId);
-    }
-    if (msg.text.indexOf("📦 Recent Orders") === 0) {
-      // BOT_WAITING_FOR_RESPONSE = false;
-      USERS_STATE[chatId] = {};
-      handleRecentCommand(chatId);
-    }
-    if (msg.text.indexOf("🏷️ TopUp PUBG UC") === 0) {
+    if (msg.text.indexOf("🔍 Memberships Search") === 0) {
       // BOT_WAITING_FOR_RESPONSE = false;
       USERS_STATE[chatId] = {};
 
-      handlePubgOffersCommand(chatId);
-      return;
-    }
-    if (msg.text.indexOf("🏷️ TopUp Free Fire Gems") === 0) {
-      // BOT_WAITING_FOR_RESPONSE = false;
-      USERS_STATE[chatId] = {};
-
-      handleFreeFireOffersCommand(chatId);
+      handleGetMembership(chatId);
 
       return;
     }
-
     ///
     if (msg.text.indexOf("🔑 Set/Change Api Key") === 0) {
       // BOT_WAITING_FOR_RESPONSE = false;
@@ -732,29 +390,38 @@ bot.on("message", async (msg) => {
 });
 
 ///THIS IS ADDED TO PREVENT RENDER FROM SPINNING OFF
-function reloadWebsite() {
-  const url = `https://ich7en-automated-telegram-bot.onrender.com/`; // Replace with your Render URL
-  const interval = 30000; // Interval in milliseconds (30 seconds)
-  axios
-    .get(url)
-    .then((response) => {
-      console.log(
-        `Reloaded at ${new Date().toISOString()}: Status Code ${
-          response.status
-        }`
-      );
-    })
-    .catch((error) => {
-      console.error(
-        `Error reloading at ${new Date().toISOString()}:`,
-        error.message
-      );
-    });
-}
+// function reloadWebsite() {
+//   const url = `https://ich7en-automated-telegram-bot.onrender.com/`; // Replace with your Render URL
+//   const interval = 30000; // Interval in milliseconds (30 seconds)
+//   axios
+//     .get(url)
+//     .then((response) => {
+//       console.log(
+//         `Reloaded at ${new Date().toISOString()}: Status Code ${
+//           response.status
+//         }`
+//       );
+//     })
+//     .catch((error) => {
+//       console.error(
+//         `Error reloading at ${new Date().toISOString()}:`,
+//         error.message
+//       );
+//     });
+// }
 
 cron.schedule("* * * * *", () => {
-  reloadWebsite();
+  notifyAdmin();
 });
+
+// cron.schedule("* * * * *", () => {
+//   reloadWebsite();
+// });
+
+// cron.schedule('0 */5 * * *', () => {
+//   console.log('Cron Job 1: Running every 5 hours');
+//   // Add your task logic here
+// });
 
 app.listen(Port, () => {
   console.log(`App listening on port ${Port}`);
