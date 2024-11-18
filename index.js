@@ -291,7 +291,7 @@ async function notifyAdmin(_Memberships) {
             🚨 *Membership Expired:* 🚨 ${ExpiredSub?.email} \n\n
             🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨\n
             🏷️ _Plan:_  \`${
-              PLANS[ExpiredSub?.membership] || "UNKNOWN PLAN"
+              PLANS[ExpiredSub?.membership].plan || "UNKNOWN PLAN"
             }\`\n 
             📆 _Start Date:_  \`${ExpiredSub?.start_date}\`\n
             📆 _End Date:_  \`${ExpiredSub?.end_date}\`\n
