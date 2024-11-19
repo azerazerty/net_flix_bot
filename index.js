@@ -250,7 +250,8 @@ async function handleGetMembership(chatId) {
     bot.sendMessage(
       chatId,
       `*Membership Found:* ${result.email} \n\n
-      *STATUS:*  ${statusPoint}  *${result.status.toUpperCase()}*\n\n 
+      *STATUS:*  ${statusPoint}  *${result.status.toUpperCase()}*\n\n
+      👤 _Client Name:_  \`${result.name}\`\n  
       🏷️ _Plan:_  \`${PLANS[result?.membership].plan || "UNKNOWN PLAN"}\`\n 
       📆 _Start Date:_  \`${result.start_date}\`\n
       📆 _End Date:_  \`${result.end_date}\`\n
@@ -290,6 +291,7 @@ async function notifyAdmin(_Memberships) {
             `
             🚨 *Membership Expired:* 🚨 ${ExpiredSub?.email} \n\n
             🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨\n
+            👤 _Client Name:_  \`${result.name}\`\n  
             🏷️ _Plan:_  \`${
               PLANS[ExpiredSub?.membership].plan || "UNKNOWN PLAN"
             }\`\n 
