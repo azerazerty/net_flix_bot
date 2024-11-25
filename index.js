@@ -267,7 +267,7 @@ async function handleGetMembership(chatId) {
   bot.on("message", handleMessage);
 }
 
-async function notifyAdmin(_Memberships) {
+async function notifyAdmin() {
   //search for users and send updates
   try {
     let ExpiredSubs = await axios
@@ -291,7 +291,7 @@ async function notifyAdmin(_Memberships) {
             `
             🚨 *Membership Expired:* 🚨 ${ExpiredSub?.email} \n\n
             🚨🚨🚨🚨🚨🚨🚨🚨🚨🚨\n
-            👤 _Client Name:_  \`${result.name}\`\n  
+            👤 _Client Name:_  \`${ExpiredSub.name}\`\n  
             🏷️ _Plan:_  \`${
               PLANS[ExpiredSub?.membership].plan || "UNKNOWN PLAN"
             }\`\n 
@@ -413,7 +413,10 @@ function reloadWebsite() {
     });
 }
 
-cron.schedule("0 * * * *", () => {
+// cron.schedule("0 * * * *", () => {
+//   notifyAdmin();
+// });
+cron.schedule("* * * * *", () => {
   notifyAdmin();
 });
 cron.schedule("* * * * *", () => {
