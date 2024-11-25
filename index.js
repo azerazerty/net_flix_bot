@@ -413,12 +413,12 @@ function reloadWebsite() {
     });
 }
 
-// cron.schedule("0 * * * *", () => {
-//   notifyAdmin();
-// });
-cron.schedule("* * * * *", () => {
+cron.schedule("0 * * * *", () => {
   notifyAdmin();
 });
+// cron.schedule("* * * * *", () => {
+//   notifyAdmin();
+// });
 cron.schedule("* * * * *", () => {
   reloadWebsite();
 });
